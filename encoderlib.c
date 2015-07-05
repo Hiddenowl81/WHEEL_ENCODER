@@ -1,4 +1,5 @@
-/*Copyright (c) 2015, Jasper Dupuis and Nicholas Campbell
+/*
+Copyright (c) 2015, Jasper Dupuis and Nicholas Campbell
 All rights reserved.
 Redistribution and use in source and binary forms, with or without modification, are permitted
 provided that the following conditions are met:
@@ -25,43 +26,60 @@ RY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- 
-This header file includes prototypes of what's necessary to enable wheel encoder program. 
-The software is designed such that for a wheel with N holes or notches, there 
-will be 2N ticks of the counter. This is because the wheel and encoder share 
-the same axis and speed of rotation. Using a measured diameter of 6.5cm and 
-N=6 as specified, this equates to 1.7 cm / tick.
-
-An 8-bit variable is used as it corresponds to over 216cm of travel before overflow.
-The resolution can be increased by a factor of 2 or 4 before the counters are at 
-risk of overflow.
-
-encoder_setup(); must be called by your main function.
-
 */
 
-#ifndef ENCODER_LIB_H
-#define ENCODER_LIB_H
+#include "encoderlib.h"
+#include <stdio.h>
+#include <avr/io.h>
+#include <avr/pgmspace.h>
 
-#include <avr/interrupt.h>
-#include <stdint.h>
+uint8_t left_encoder_count(void)
+{
+	return(lefttick);
+}
 
-volatile uint8_t lefttick;
-volatile uint8_t righttick;
+uint8_t right_encoder_count(void)
+{
+	return(righttick);
+}
 
-uint8_t left_encoder_count(void);
+void reset_encoders(void) // This is the requirement for the Open Source project. A simple modification can enable modification of only one of the counters.
+{
+	lefttick = 0;
+	righttick = 0;
+	return;
+}
 
-uint8_t right_encoder_count(void);
+void encoder_setup(void)
+{
+	cli();									//disables interrupts.
+	reset_encoders();
+	DDRD &= ~((1<<PD2)|(1<<PD3));			// Sets PD2 and PD3 to input and leaves the rest of PORTD/PIND alone. May not be necessary.
+	EIMSK |= (1<<INT0)|(1<<INT1);			// Enables INT0 and INT1 but leaves the rest of this register unchanged.
+	uint8_t temporary=EICRA;				// Necessary as ISC are two bit for each of INT0, INT1, INT2 and do not wish to overwrite INT2.
+	temporary &= 0b11110000;				// leaves bits 7-4 unchanged, bits 3-0 all set to 0 for setting up INT0 and INT1.
+	EICRA |= (1<<ISC00)|(1<<ISC10);			// Sets INT0 and INT 1 to trigger on either a rising or falling edge. For N holes/notches in the encoder wheel, there will be 2N ticks on the counter variables.
+	EICRA |= temporary|EICRA;				// This preserves the original configuration of EICRA.
+	sei();									// enables interrupts.
+}
 
-void reset_encoders(void);
+ISR(INT0_vect)								// PD2, left wheel.
+{
+	lefttick++;
+	
+	//printf_P(PSTR("The left count is %d\n"),lefttick); // For testing with PuTTy.
+	EIFR |= (1<<INTF0);						// Clears this interrupt.
+}
 
-void encoder_setup(void);
+ISR(INT1_vect)								// PD3, Right wheel.
+{
+	righttick++;
+	
+	//printf_P(PSTR("The right count is %d\n"),righttick); // For testing with PuTTy.
+	EIFR |= (1<<INTF1);						// Clears this interrupt.
+}
 
-ISR(INT0_vect);
-
-ISR(INT1_vect);
-
-ISR(__vector_default);
-
-#endif
+ISR(__vector_default)
+{
+											// If an unexpected interrupt occurs this will toggle.
+}
