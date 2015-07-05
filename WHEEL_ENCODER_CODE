@@ -1,1 +1,83 @@
+/*MAIN CODE
+ * Encoder.c
+ *
+ * Created: 7/5/2015 9:10:02 AM
+ *  Author: owner
+ */ 
 
+/*
+Copyright (c) 2015, Jasper Dupuis and Nicholas Campbell
+All rights reserved.
+Redistribution and use in source and binary forms, with or without modification, are permitted
+provided that the following conditions are met:
+1. Redistributions of source code must retain the abov
+e copyright notice, this list of conditions and
+the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions
+and the following disclaimer in the documentation and/or other materials provided
+with the distribution.
+3. Neither the name of the copyright holder nor the names of its contributors may be used to
+endorse or promote products derived from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS"AS IS"
+ AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+*/
+
+#include "encoderlib.h"
+
+//the below is all for validation. Vary the number of the IF statement to confirm this is operating as desired.
+
+#include <stdio.h>
+#include <avr/io.h>
+#include <avr/pgmspace.h>
+
+static int uart_putchar(char c, FILE *stream);
+static int uart_getchar(FILE *stream);
+FILE mystdout = FDEV_SETUP_STREAM(uart_putchar, NULL, _FDEV_SETUP_WRITE);
+FILE mystdin = FDEV_SETUP_STREAM(NULL, uart_getchar, _FDEV_SETUP_READ);
+
+static int uart_putchar(char c, FILE *stream)
+{
+	loop_until_bit_is_set(UCSR0A, UDRE0);
+	UDR0 = c;
+	return 0;
+}
+static int uart_getchar(FILE *stream)
+{
+	loop_until_bit_is_set(UCSR0A, RXC0); /* Wait until data exists. */
+	return UDR0;
+}
+void init_uart(void)
+{
+	UCSR0B = (1<<RXEN0) | (1<<TXEN0);
+	UBRR0 = 7;
+	stdout = &mystdout;
+	stdin = &mystdin;
+}
+
+int main(void)
+{
+	encoder_setup();
+	init_uart();
+	while(1)
+	{
+		if(right_encoder_count() == 7) printf_P(PSTR("The right count is %d\n"),right_encoder_count()); // For testing with PuTTy.
+		if(left_encoder_count() == 9) printf_P(PSTR("The left count is %d\n"),left_encoder_count()); // For testing with PuTTy.
+		if((left_encoder_count() > 27) && (right_encoder_count()>12))
+		{
+			printf_P(PSTR("Reset!\n")); // For testing with PuTTy.
+			reset_encoders();
+		}
+		continue; // nothing to see here.
+	}
+	return(0);
+}
